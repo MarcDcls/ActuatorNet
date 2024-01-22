@@ -1,0 +1,5 @@
+data/*
+logs/*
+models/*
+wandb/*
+__pycache__/*
