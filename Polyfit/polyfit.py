@@ -34,7 +34,7 @@ class spline:
         first = max(0, int((x - self.x[0])/ (self.x[-1] - self.x[0]) * self.segments) - int(searching_window/2))
 
         for i in range(first, first + searching_window):
-            if x <= self.bounds[i][1]:
+            if x < self.bounds[i][1]:
                 if der == 0:
                     y = np.polyval(self.coeffs[i], x)
                 else:

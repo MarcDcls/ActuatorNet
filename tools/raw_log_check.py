@@ -1,13 +1,15 @@
 import sys
-import os
 import matplotlib.pyplot as plt
 import numpy as np
 import placo
-import argparse
 from Polyfit.polyfit import spline
 
 read_values = True
 torque_estimation = True
+
+vizualize = False
+arrow_vizualize = False
+frame_vizualize = False
 
 window_size = [15, 20, 30]
 intersected_values = [13, 18, 28]
@@ -74,9 +76,17 @@ for joint in robot.joint_names():
         speeds_list[j][joint] = joint_speed
         accelerations_list[j][joint] = joint_acc
 
+if vizualize:
+    from placo_utils.visualization import robot_viz, arrow_viz, frame_viz
+    import time
+    viz = robot_viz(robot)
+    viz.display(robot.state.q)
+    time.sleep(3)
+
 # Extract the data for the plotted joints
 pressure_left = []
 pressure_right = []
+contacts = []
 torques = dict.fromkeys(robot.joint_names())
 false_torques = dict.fromkeys(robot.joint_names())
 for i, t in enumerate(timestamps):
@@ -88,9 +98,33 @@ for i, t in enumerate(timestamps):
                                history.number("right_pressure_1", t),
                                history.number("right_pressure_2", t),
                                history.number("right_pressure_3", t)])
-    
+
+    contacts.append(contact_forces)
+
     robot.read_from_histories(history, t, "read", True)
     robot.update_kinematics()
+
+    if vizualize:
+        viz.display(robot.state.q)
+
+        if arrow_vizualize or frame_vizualize:
+            for i, contact in enumerate(contact_forces):
+                if i < 4:
+                    frame = robot.get_T_world_frame(f"left_ps_{i}")
+                else:
+                    frame = robot.get_T_world_frame(f"right_ps_{i - 4}")
+
+                if frame_vizualize:
+                    frame_viz(f"contact_{i}_frame", frame)
+
+                if arrow_vizualize:
+                    src = frame[:3, 3]
+                    dst = src.copy()
+                    dst[2] += 0.005 * contact_forces[i]
+                    dst[0] += 1e-5
+                    arrow_viz(f"contact_{i}", src, dst)
+
+        time.sleep(dt)
 
     qdd_a = np.zeros(20)
     for joint in robot.joint_names():
@@ -159,8 +193,12 @@ for joint in joints:
 
         plt.subplot(311)
         plt.title(joint)
-        plt.plot(timestamps, pressure_left, label="left pressure", linewidth=1)
-        plt.plot(timestamps, pressure_right, label="right pressure", linewidth=1)
+        plt.plot(timestamps, pressure_left, label="left pressure", c="tab:blue", linewidth=1)
+        plt.plot(timestamps, pressure_right, label="right pressure", c="tab:orange", linewidth=1)
+        for i in range(4):
+            plt.plot(timestamps, [contacts[j][i] for j in range(len(timestamps))], label=f"left contact {i}", c="tab:cyan", linewidth=.5)
+        for i in range(4):
+            plt.plot(timestamps, [contacts[j][i + 4] for j in range(len(timestamps))], label=f"right contact {i}", c="goldenrod", linewidth=.5)
         plt.grid()
         plt.xlabel("time")
         plt.ylabel("force (N)")
