@@ -2,8 +2,10 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import placo
-from Polyfit.polyfit import spline
+from polyfit import spline
+from log_processing import SAMPLE_RATE
 
+sampled_vs_raw = True
 read_values = True
 torque_estimation = True
 
@@ -28,6 +30,7 @@ robot = placo.HumanoidRobot("sigmaban")
 
 # Timeline based on the logging timestamps
 timestamps = history.getTimestamps()[:plotted_points]
+corrected_timestamps = np.arange(timestamps[0], timestamps[-1], 1/SAMPLE_RATE)
 
 # Estimation of the logging framerate
 ts = []
@@ -43,9 +46,11 @@ read_positions = dict.fromkeys(robot.joint_names())
 naive_speeds = dict.fromkeys(robot.joint_names())
 naive_accelerations = dict.fromkeys(robot.joint_names())
 
+sampled_read_positions_list = []
 speeds_list = []
 accelerations_list = []
 for i in range(len(window_size)):
+    sampled_read_positions_list.append(dict.fromkeys(robot.joint_names()))
     speeds_list.append(dict.fromkeys(robot.joint_names()))
     accelerations_list.append(dict.fromkeys(robot.joint_names()))
 
@@ -70,9 +75,11 @@ for joint in robot.joint_names():
     for j in range(len(window_size)):
         s = spline(window_size=window_size[j], degree=degree[j], intersected_values=intersected_values[j], x=timestamps, y=read_positions[joint])
         s.fit()
+        sampled_read_positions = [s.value(t) for t in corrected_timestamps]
         joint_speed = [s.value(t, der=1) for t in timestamps]
         joint_acc = [s.value(t, der=2) for t in timestamps]
 
+        sampled_read_positions_list[j][joint] = sampled_read_positions
         speeds_list[j][joint] = joint_speed
         accelerations_list[j][joint] = joint_acc
 
@@ -152,39 +159,51 @@ for i, t in enumerate(timestamps):
 
 
 for joint in joints:
+    # Plotting raw read position and polyfitted at constant framerate one
+    if sampled_vs_raw:
+        plt.title(joint)
+        plt.scatter(timestamps, read_positions[joint], label="raw positions", s=2)
+        plt.plot(corrected_timestamps, sampled_read_positions_list[used_acc][joint], label="polyfitted positions", linewidth=1)
+        plt.xlabel("time")
+        plt.ylabel("position (rad)")
+        plt.grid()
+        plt.legend()
+        plt.show()
+
+
     # Plotting read position and polyfitted speed and acc
     if read_values:
-            plt.subplots(3, 1, sharex=True)
+        plt.subplots(3, 1, sharex=True)
 
-            plt.subplot(311)
-            plt.title(joint)
-            plt.scatter(timestamps, read_positions[joint], label="raw positions", s=2)
-            plt.plot(timestamps, read_positions[joint], linewidth=1)
-            plt.xlabel("time")
-            plt.ylabel("position (rad)")
-            plt.grid()
-            plt.legend()
+        plt.subplot(311)
+        plt.title(joint)
+        plt.scatter(timestamps, read_positions[joint], label="raw positions", s=2)
+        plt.plot(timestamps, read_positions[joint], linewidth=1)
+        plt.xlabel("time")
+        plt.ylabel("position (rad)")
+        plt.grid()
+        plt.legend()
 
-            plt.subplot(312)
-            plt.plot(timestamps[1:-1], naive_speeds[joint][1:-1], label="naive speed", linewidth=1)
-            for i in range(len(window_size)):
-                speed_dict = speeds_list[i]
-                plt.plot(timestamps, speed_dict[joint], label=f"speed: w{window_size[i]} | d{degree[i]} | i{intersected_values[i]}", linewidth=1)
-            plt.xlabel("time")
-            plt.ylabel("speed (rad/s)")
-            plt.grid()
-            plt.legend()
+        plt.subplot(312)
+        plt.plot(timestamps[1:-1], naive_speeds[joint][1:-1], label="naive speed", linewidth=1)
+        for i in range(len(window_size)):
+            speed_dict = speeds_list[i]
+            plt.plot(timestamps, speed_dict[joint], label=f"speed: w{window_size[i]} | d{degree[i]} | i{intersected_values[i]}", linewidth=1)
+        plt.xlabel("time")
+        plt.ylabel("speed (rad/s)")
+        plt.grid()
+        plt.legend()
 
-            plt.subplot(313)
-            plt.plot(timestamps[2:-2], naive_accelerations[joint][2:-2], label="naive acceleration", linewidth=1)
-            for i in range(len(window_size)):
-                acc_dict = accelerations_list[i]
-                plt.plot(timestamps, acc_dict[joint], label=f"acceleration: w{window_size[i]} | d{degree[i]} | i{intersected_values[i]}", linewidth=1)
-            plt.xlabel("time")
-            plt.ylabel("acc (rad/s^2)")
-            plt.grid()
-            plt.legend()
-            plt.show()
+        plt.subplot(313)
+        plt.plot(timestamps[2:-2], naive_accelerations[joint][2:-2], label="naive acceleration", linewidth=1)
+        for i in range(len(window_size)):
+            acc_dict = accelerations_list[i]
+            plt.plot(timestamps, acc_dict[joint], label=f"acceleration: w{window_size[i]} | d{degree[i]} | i{intersected_values[i]}", linewidth=1)
+        plt.xlabel("time")
+        plt.ylabel("acc (rad/s^2)")
+        plt.grid()
+        plt.legend()
+        plt.show()
 
     
     # Plotting torques and acceleration

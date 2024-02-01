@@ -2,13 +2,14 @@ import numpy as np
 import json
 import os
 import placo
-from Polyfit.polyfit import spline
+from polyfit import spline
 import optparse
 from dataset import Dataset
 
 # import warnings
 # warnings.filterwarnings("ignore", category=np.RankWarning)
 
+# Exhautive list of MX106 joints (extended with r1 and r2 to process the logs from the 2R arm)
 MX106 = {"left_hip_roll",
          "left_hip_pitch",
          "left_knee",
@@ -18,7 +19,16 @@ MX106 = {"left_hip_roll",
          "right_hip_pitch",
          "right_knee",
          "right_ankle_roll",
-         "right_ankle_pitch"}
+         "right_ankle_pitch",
+         "r1",
+         "r2",}
+
+# Spline fitting parameters for log from the robot
+WINDOW_SIZE = 15
+DEGREE = 2
+INTERSECTED_VALUES = 13
+
+SAMPLE_RATE = 100 # Hz
 
 class LogData:
     """
@@ -43,7 +53,8 @@ class LogData:
         
         robot = placo.HumanoidRobot(robot_path)
 
-        self.timestamps = list(history.getTimestamps())
+        raw_timestamps = history.getTimestamps()
+        self.timestamps = list(np.arange(raw_timestamps[0], raw_timestamps[-1], 1/SAMPLE_RATE))
 
         # Computing speed and acceleration from read positions
         # Every joint is fitted with a spline for torques estimation
@@ -52,20 +63,22 @@ class LogData:
         self.speeds = dict.fromkeys(robot.joint_names())
         self.accelerations = dict.fromkeys(robot.joint_names())
 
-        for joint in robot.joint_names():
-            self.goal_positions[joint] = [history.number(f"goal:{joint}", t) for t in self.timestamps]
-            self.read_positions[joint] = [history.number(f"read:{joint}", t) for t in self.timestamps]
-            
-            # Spline fitting speed and acceleration
-            print(f"Fitting spline for joint {joint}...")
-            s = spline(window_size=15, degree=2, intersected_values=13, x=self.timestamps, y=self.read_positions[joint])
-            s.fit()
-            joint_speed = [s.value(t, der=1) for t in self.timestamps]
-            joint_acc = [s.value(t, der=2) for t in self.timestamps]
-            print("Done !")
+        # Spline fitting
+        for joint in robot.joint_names():                        
+            raw_goal_positions = [history.number(f"goal:{joint}", t) for t in raw_timestamps]
+            raw_read_positions = [history.number(f"read:{joint}", t) for t in raw_timestamps]
 
-            self.speeds[joint] = joint_speed
-            self.accelerations[joint] = joint_acc
+            print(f"Fitting spline for joint {joint}...")
+            goal_spline = spline(window_size=WINDOW_SIZE, degree=DEGREE, intersected_values=INTERSECTED_VALUES, x=raw_timestamps, y=raw_goal_positions)
+            goal_spline.fit()
+            self.goal_positions[joint] = [goal_spline.value(t) for t in self.timestamps]
+
+            read_spline = spline(window_size=WINDOW_SIZE, degree=DEGREE, intersected_values=INTERSECTED_VALUES, x=raw_timestamps, y=raw_read_positions)
+            read_spline.fit()
+            self.read_positions[joint] = [read_spline.value(t) for t in self.timestamps]
+            self.speeds[joint] = [read_spline.value(t, der=1) for t in self.timestamps]
+            self.accelerations[joint] = [read_spline.value(t, der=2) for t in self.timestamps]
+            print("Done !")
 
         # Estimating torques
         self.torques = dict.fromkeys(robot.joint_names())
@@ -144,16 +157,17 @@ class ActuatorNetDataset(Dataset):
 
     def add(self, log_data: LogData):
         for joint in MX106:
-            for i in range(self.window_size - 1, len(log_data)):
-                position_error_history = []
-                velocity_history = []            
-                for j in range(self.window_size):
-                    position_error_history.append(log_data.goal_positions[joint][i - j] - log_data.read_positions[joint][i - j])
-                    velocity_history.append(log_data.speeds[joint][i - j])
-                
-                self.inputs.append(position_error_history + velocity_history)
-                self.outputs.append([log_data.torques[joint][i]])
-                self.size += 1
+            if joint in log_data.torques:
+                for i in range(self.window_size - 1, len(log_data)):
+                    position_error_history = []
+                    velocity_history = []            
+                    for j in range(self.window_size):
+                        position_error_history.append(log_data.goal_positions[joint][i - j] - log_data.read_positions[joint][i - j])
+                        velocity_history.append(log_data.speeds[joint][i - j])
+                    
+                    self.inputs.append(position_error_history + velocity_history)
+                    self.outputs.append([log_data.torques[joint][i]])
+                    self.size += 1
     
     def load(self, filename):
         super().load(filename)
@@ -180,13 +194,23 @@ if __name__ == "__main__":
 
     process_logs("logs/raw_logs", "logs/processed_logs")
 
+    excluded_content = ["one_leg"]
+
     dataset = ActuatorNetDataset(window_size=args.window)
     for log in os.listdir("logs/processed_logs"):
+        exlude_log = False
+        for content in excluded_content:
+            if content in log:
+                exlude_log = True
+                break
+        if exlude_log:
+            continue
+
         log_data = LogData.load("logs/processed_logs/" + log)
         dataset.add(log_data)
+        
     dataset.compute_scales()
     dataset.save("data/dataset_w" + str(args.window) + ".npz")
     
     print(f"Dataset size: {len(dataset)}")
-        
         
