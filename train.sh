@@ -1,12 +1,13 @@
 wandb=1
-epochs=500
+epochs=300
+nodes=(32, 64, 128, 256)
 windows=(2 5 10)
 activations=("ReLU" "LeakyReLU" "Tanh" "Softsign")
 
-python learn.py -s 10 -w $wandb -a Tanh -e $epochs
-
 for a in "${activations[@]}"; do
     for w in "${windows[@]}"; do
-        python learn.py -s $w -w $wandb -a $a -e $epochs
+        for n in "${nodes[@]}"; do
+            python learn.py -s $w -w $wandb -a $a -e $epochs -n $n
+        done
     done
 done

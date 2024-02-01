@@ -9,13 +9,14 @@ from tqdm import tqdm
 # Parse arguments
 parser = optparse.OptionParser()
 parser.add_option("-s", "--size", dest="window", default=2, type="int", help="window size")
+parser.add_option("-n", "--nodes", dest="nodes", default=32, type="int", help="number of nodes per layer")
 parser.add_option("-w", "--wandb", dest="wandb", default=0, type="int", help="using wandb")
 parser.add_option("-a", "--activation", dest="activation", default="ReLU", type="str", help="activation function")
-parser.add_option("-e", "--epochs", dest="epochs", default=500, type="int", help="number of epochs")
+parser.add_option("-e", "--epochs", dest="epochs", default=300, type="int", help="number of epochs")
 args = parser.parse_args()[0]
 
 use_wandb = True if args.wandb == 1 else False
-project_name = "actuator-net-clean-w" + str(args.window)
+project_name = "actuator-net-w" + str(args.window) + "-n" + str(args.nodes)
 model_name = args.activation + "-w" + str(args.window)
 
 device = th.device("cuda" if th.cuda.is_available() else "cpu")
@@ -43,7 +44,7 @@ mlp.set_input_scales(dataset.inputs_scales)
 mlp.set_output_scales(dataset.outputs_scales)
 
 optimizer = th.optim.Adam(mlp.parameters(), lr=1e-3, weight_decay=0)
-scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=20, verbose=True, threshold=1e-3, threshold_mode="rel", cooldown=0, min_lr=1e-5, eps=1e-8)
+scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=15, verbose=True, threshold=1e-3, threshold_mode="rel", cooldown=0, min_lr=1e-5, eps=1e-8)
 
 loss_func = th.nn.functional.smooth_l1_loss
 
