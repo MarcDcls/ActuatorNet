@@ -1,6 +1,6 @@
 wandb=1
 epochs=300
-nodes=(32, 64, 128, 256)
+nodes=(32 64 128 256)
 windows=(2 5 10)
 activations=("ReLU" "LeakyReLU" "Tanh" "Softsign")
 

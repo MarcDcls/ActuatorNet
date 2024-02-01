@@ -17,7 +17,7 @@ args = parser.parse_args()[0]
 
 use_wandb = True if args.wandb == 1 else False
 project_name = "actuator-net-w" + str(args.window) + "-n" + str(args.nodes)
-model_name = args.activation + "-w" + str(args.window)
+model_name = args.activation + "-w" + str(args.window) + "-n" + str(args.nodes)
 
 device = th.device("cuda" if th.cuda.is_available() else "cpu")
 
@@ -39,7 +39,7 @@ elif args.activation == "LeakyReLU":
 else:
     raise ValueError("Activation function not supported")
 
-mlp = MLP(dataset.inputs_size, dataset.outputs_size, 32, 3, activation, device)
+mlp = MLP(dataset.inputs_size, dataset.outputs_size, args.nodes, 3, activation, device)
 mlp.set_input_scales(dataset.inputs_scales)
 mlp.set_output_scales(dataset.outputs_scales)
 
