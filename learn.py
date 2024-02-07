@@ -93,7 +93,8 @@ for epoch in range(epochs):
         wandb.log({"epoch": epoch + 1, 
                    "avg_tloss": avg_tloss, 
                    "avg_vloss": avg_vloss, 
-                   "lr": optimizer.param_groups[0]["lr"]})
+                   "lr": optimizer.param_groups[0]["lr"], 
+                   "lr_500": optimizer.param_groups[0]["lr"]*500})
 
     scheduler.step(avg_vloss)
 
