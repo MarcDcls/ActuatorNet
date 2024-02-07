@@ -16,7 +16,7 @@ parser.add_option("-e", "--epochs", dest="epochs", default=300, type="int", help
 args = parser.parse_args()[0]
 
 use_wandb = True if args.wandb == 1 else False
-project_name = "actuator-net-w" + str(args.window) + "-n" + str(args.nodes)
+project_name = "actuator-net"
 model_name = args.activation + "-w" + str(args.window) + "-n" + str(args.nodes)
 
 device = th.device("cuda" if th.cuda.is_available() else "cpu")
@@ -90,7 +90,10 @@ for epoch in range(epochs):
         avg_vloss = test_epoch(mlp, testing_loader)
 
     if use_wandb:
-        wandb.log({"epoch": epoch + 1, "avg_tloss": avg_tloss, "avg_vloss": avg_vloss, "lr": optimizer.param_groups[0]["lr"]})
+        wandb.log({"epoch": epoch + 1, 
+                   "avg_tloss": avg_tloss, 
+                   "avg_vloss": avg_vloss, 
+                   "lr": optimizer.param_groups[0]["lr"]})
 
     scheduler.step(avg_vloss)
 

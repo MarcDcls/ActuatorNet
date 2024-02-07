@@ -48,6 +48,7 @@ class Dataset(TorchDataset):
     def split(self, ratio: float) -> ("Dataset", "Dataset"):
         """
         Split the dataset into two datasets of sizes ratio and 1 - ratio.
+        Do not shuffle the dataset before splitting.
         """
         if ratio < 0 or ratio > 1:
             raise ValueError(f"Ratio should be between 0 and 1 but is {ratio}")
@@ -55,19 +56,15 @@ class Dataset(TorchDataset):
         dataset_1 = Dataset(self.inputs_size, self.outputs_size)
         dataset_2 = Dataset(self.inputs_size, self.outputs_size)
 
-        indices = np.arange(self.size)
-        np.random.shuffle(indices)
-        split_index = int(self.size * ratio)
-        indices_1 = indices[:split_index]
-        indices_2 = indices[split_index:]
+        index = int(ratio * self.size)
 
-        dataset_1.inputs = [self.inputs[index] for index in indices_1]
-        dataset_1.outputs = [self.outputs[index] for index in indices_1]
-        dataset_1.size = len(indices_1)
+        dataset_1.inputs = self.inputs[:index]
+        dataset_1.outputs = self.outputs[:index]
+        dataset_1.size = index
 
-        dataset_2.inputs = [self.inputs[index] for index in indices_2]
-        dataset_2.outputs = [self.outputs[index] for index in indices_2]
-        dataset_2.size = len(indices_2)
+        dataset_2.inputs = self.inputs[index:]
+        dataset_2.outputs = self.outputs[index:]
+        dataset_2.size = self.size - index
 
         return dataset_1, dataset_2
 
