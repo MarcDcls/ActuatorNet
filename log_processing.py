@@ -194,7 +194,7 @@ if __name__ == "__main__":
 
     process_logs("logs/raw_logs", "logs/processed_logs")
 
-    excluded_content = ["one_leg"]
+    excluded_content = ["one_leg", "no_ground"]
 
     dataset = ActuatorNetDataset(window_size=args.window)
     for log in os.listdir("logs/processed_logs"):

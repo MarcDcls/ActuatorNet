@@ -18,6 +18,7 @@ args = parser.parse_args()[0]
 use_wandb = True if args.wandb == 1 else False
 project_name = "actuator-net"
 model_name = args.activation + "-w" + str(args.window) + "-n" + str(args.nodes)
+config = {"window": args.window, "nodes": args.nodes, "activation": args.activation}
 
 device = th.device("cuda" if th.cuda.is_available() else "cpu")
 
@@ -73,7 +74,7 @@ def test_epoch(net, loader):
     return loss_sum / len(loader)
 
 if use_wandb:
-    wandb.init(project=project_name, name=model_name)
+    wandb.init(project=project_name, name=model_name, config=config)
     wandb.watch(mlp)
 
 epochs = args.epochs
