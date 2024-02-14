@@ -22,7 +22,7 @@ config = {"window": args.window, "nodes": args.nodes, "activation": args.activat
 
 device = th.device("cuda" if th.cuda.is_available() else "cpu")
 
-dataset = Dataset.load("data/dataset_w" + str(args.window) + ".npz")
+dataset = Dataset.load("data/dataset_gyro_w" + str(args.window) + ".npz")
 # dataset.shuffle() # No shuffling to have drastically different training and testing datasets
 train_dataset, test_dataset = dataset.split(0.8)
 

@@ -47,7 +47,7 @@ class LogData:
             return 0
         return len(self.timestamps)
     
-    def extract(self, history: placo.HistoryCollection, robot_path: str):
+    def extract(self, history: placo.HistoryCollection, robot_path: str, gyro=False):
         if self.timestamps is not None:
             return
         
@@ -92,7 +92,15 @@ class LogData:
                                     history.number("right_pressure_2", t),
                                     history.number("right_pressure_3", t)])
             
-            robot.read_from_histories(history, t, "read", True)
+            if gyro:
+                qd_a = np.zeros(20)
+                for joint in robot.joint_names():
+                    joint_offset = robot.get_joint_v_offset(joint) - 6
+                    qd_a[joint_offset] = self.speeds[joint][i]
+                robot.read_from_histories(history, t, "read", True, qd_a)
+            else:
+                robot.read_from_histories(history, t, "read", True)
+
             robot.update_kinematics()
 
             qdd_a = np.zeros(20)
@@ -100,7 +108,7 @@ class LogData:
                 joint_offset = robot.get_joint_v_offset(joint) - 6
                 qdd_a[joint_offset] = self.accelerations[joint][i]
 
-            torques_dict = robot.get_torques_dict(qdd_a, contact_forces, False)
+            torques_dict = robot.get_torques_dict(qdd_a, contact_forces, True) if gyro else robot.get_torques_dict(qdd_a, contact_forces, False)
             for joint in robot.joint_names():
                 if self.torques[joint] is None:
                     self.torques[joint] = [torques_dict[joint]]
@@ -184,33 +192,42 @@ def process_logs(src_directory, dst_directory):
             history.loadReplays(os.path.join(src_directory, log))
 
             log_data = LogData()
-            log_data.extract(history, "sigmaban")
+            if "gyro" in log:
+                log_data.extract(history, "sigmaban", gyro=True)
+            else:
+                print("NOT USING GYRO")
+                log_data.extract(history, "sigmaban")
             log_data.save(save_path)
 
 if __name__ == "__main__":
     parser = optparse.OptionParser()
     parser.add_option("-s", "--size", dest="window", default=2, type="int", help="window size")
+    parser.add_option("-g", "--gyro", dest="gyro", default=False, action="store_true", help="Log contains gyro data")
     args = parser.parse_args()[0]
 
     process_logs("logs/raw_logs", "logs/processed_logs")
 
-    excluded_content = ["one_leg", "no_ground"]
+    included_content = ["rw_gyro"] if args.gyro else ["rw1", "rw2", "rw3", "rw4"]
 
     dataset = ActuatorNetDataset(window_size=args.window)
     for log in os.listdir("logs/processed_logs"):
-        exlude_log = False
-        for content in excluded_content:
+        use_log = False
+        for content in included_content:
             if content in log:
-                exlude_log = True
+                use_log = True
                 break
-        if exlude_log:
+        if not use_log:
             continue
 
         log_data = LogData.load("logs/processed_logs/" + log)
         dataset.add(log_data)
         
     dataset.compute_scales()
-    dataset.save("data/dataset_w" + str(args.window) + ".npz")
+    
+    if args.gyro:
+        dataset.save("data/dataset_gyro_w" + str(args.window) + ".npz")
+    else:
+        dataset.save("data/dataset_w" + str(args.window) + ".npz")
     
     print(f"Dataset size: {len(dataset)}")
         

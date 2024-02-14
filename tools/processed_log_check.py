@@ -4,19 +4,30 @@ from log_processing import LogData, MX106
 
 import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.linear_model import LinearRegression
 import placo
+
 
 joints = ["right_knee", "right_hip_pitch", "right_hip_roll", "right_ankle_pitch", "right_ankle_roll", "r1", "r2"]
 
 nb_points = 500
-read_values = False
+read_values = True
 torque = False
 
 error_vs_torque_mixed = True
 error_vs_torque_per_joint = False
-intervals = [[-6, 6], [-1, -0.8], [0.8, 1]]
+plot_regression = False
+# intervals = [[-6, 6]]
+# intervals = [[-0.3, -0.2], [0.2, 0.3]]
+# intervals = [[-0.4, -0.3], [0.3, 0.4]]
+intervals = [[-0.5, -0.4], [0.4, 0.5]]
+# intervals = [[-0.6, -0.5], [0.5, 0.6]]
+# intervals = [[-0.7, -0.6], [0.6, 0.7]]
+# intervals = [[-0.8, -0.7], [0.7, 0.8]]
+# intervals = [[-0.9, -0.8], [0.8, 0.9]]
+# intervals = [[-1, -0.9], [0.9, 1]]
 
-speed_vs_torque = True
+speed_vs_torque = False
 
 # Loading data from the processed log file
 data_list = []
@@ -73,6 +84,8 @@ for joint in joints:
 
 # Plotting torque vs error
 if error_vs_torque_mixed: 
+    torques_list = []
+    errors_list = []
     for i in range(len(intervals)):
         torques = []
         errors = []
@@ -83,38 +96,61 @@ if error_vs_torque_mixed:
                         if d.speeds[joint][j] > intervals[i][0] and d.speeds[joint][j] < intervals[i][1]:
                             torques.append(d.torques[joint][j])
                             errors.append(d.goal_positions[joint][j] - d.read_positions[joint][j])
+        torques_list.append(torques)
+        errors_list.append(errors)
 
-        plt.title("Position error vs torque for torque in " + str(intervals[i]))
-        plt.scatter(torques, errors, label="error", s=1)
-        plt.xlabel("torque (N.m)")
-        plt.ylabel("position error (rad)")
-        plt.grid()
-        plt.legend()
-        plt.show()
+    plt.title("Position error vs torque")            
+
+    model = LinearRegression()
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    for i in range(len(intervals)):
+        plt.scatter(torques_list[i], errors_list[i], label="error for speed in " + str(intervals[i]), s=1, c=colors[i])
+        
+        if plot_regression:
+            X = np.array(torques_list[i]).reshape(-1, 1)
+            model.fit(np.array(torques_list[i]).reshape(-1, 1), errors_list[i])
+            plt.plot(X, model.predict(X), linewidth=1, c=colors[i])
+
+    plt.xlabel("torque (N.m)")
+    plt.ylabel("position error (rad)")
+    plt.grid()
+    plt.legend()
+    plt.show()
 
 # Plotting torque vs error per joint
 if error_vs_torque_per_joint:
     for joint in MX106:
         if joint in data.torques:
+            torques_list = []
+            errors_list = []
             for i in range(len(intervals)):
-                print(intervals[i])
-                print(joint)
                 torques = []
                 errors = []
                 for d in data_list:
                     for j in range(len(d.timestamps)):
-                        print(d.speeds[joint][j])
                         if d.speeds[joint][j] > intervals[i][0] and d.speeds[joint][j] < intervals[i][1]:
                             torques.append(d.torques[joint][j])
                             errors.append(d.goal_positions[joint][j] - d.read_positions[joint][j])
+                torques_list.append(torques)
+                errors_list.append(errors)
+            
+            plt.title("Position error vs torque for " + joint)
 
-                plt.title("Position error vs torque for " + joint + " for torque in " + str(intervals[i]))
-                plt.scatter(torques, errors, label="error", s=1)
-                plt.xlabel("torque (N.m)")
-                plt.ylabel("position error (rad)")
-                plt.grid()
-                plt.legend()
-                plt.show()
+            model = LinearRegression()
+            colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+            for i in range(len(intervals)):
+                plt.scatter(torques_list[i], errors_list[i], label="error for speed in " + str(intervals[i]), s=1, c=colors[i])
+
+                if plot_regression:
+                    X = np.array(torques_list[i]).reshape(-1, 1)
+                    model.fit(np.array(torques_list[i]).reshape(-1, 1), errors_list[i])
+                    plt.plot(X, model.predict(X), linewidth=1, c=colors[i])
+
+            plt.xlabel("torque (N.m)")
+            plt.ylabel("position error (rad)")
+            plt.grid()
+            plt.legend()
+            plt.show()
 
 # Plotting speed vs torque
 if speed_vs_torque:

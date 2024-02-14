@@ -2,10 +2,16 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import placo
+import optparse
 from polyfit import spline
 from log_processing import SAMPLE_RATE
 
-sampled_vs_raw = True
+# Parsing arguments
+parser = optparse.OptionParser()
+parser.add_option("-g", "--gyro", dest="gyro", default=False, action="store_true", help="Log contains gyro data")
+args = parser.parse_args()[0]
+
+sampled_vs_raw = False
 read_values = True
 torque_estimation = True
 
@@ -16,7 +22,7 @@ frame_vizualize = False
 window_size = [15, 20, 30]
 intersected_values = [13, 18, 28]
 degree = [2, 2, 2]
-used_acc = 0
+used_spline = 0
 
 plotted_points = 500
 joints = ["right_knee", "right_hip_pitch", "right_hip_roll", "right_ankle_pitch", "right_ankle_roll"]
@@ -94,7 +100,9 @@ if vizualize:
 pressure_left = []
 pressure_right = []
 contacts = []
-torques = dict.fromkeys(robot.joint_names())
+torques_g = dict.fromkeys(robot.joint_names())
+if args.gyro:
+    torques_nle = dict.fromkeys(robot.joint_names())
 false_torques = dict.fromkeys(robot.joint_names())
 for i, t in enumerate(timestamps):
     contact_forces = np.array([history.number("left_pressure_0", t),
@@ -108,7 +116,15 @@ for i, t in enumerate(timestamps):
 
     contacts.append(contact_forces)
 
-    robot.read_from_histories(history, t, "read", True)
+    if args.gyro:
+        qd_a = np.zeros(20)
+        for joint in robot.joint_names():
+            joint_offset = robot.get_joint_v_offset(joint) - 6
+            qd_a[joint_offset] = speeds_list[used_spline][joint][i]
+        robot.read_from_histories(history, t, "read", True, qd_a)
+    else:
+        robot.read_from_histories(history, t, "read", True)
+
     robot.update_kinematics()
 
     if vizualize:
@@ -136,14 +152,22 @@ for i, t in enumerate(timestamps):
     qdd_a = np.zeros(20)
     for joint in robot.joint_names():
         joint_offset = robot.get_joint_v_offset(joint) - 6
-        qdd_a[joint_offset] = accelerations_list[used_acc][joint][i]
+        qdd_a[joint_offset] = accelerations_list[used_spline][joint][i]
 
-    torques_dict = robot.get_torques_dict(qdd_a, contact_forces, False)
+    torques_g_dict = robot.get_torques_dict(qdd_a, contact_forces, False)
     for joint in joints:
-        if torques[joint] is None:
-            torques[joint] = [torques_dict[joint]]
+        if torques_g[joint] is None:
+            torques_g[joint] = [torques_g_dict[joint]]
         else:
-            torques[joint].append(torques_dict[joint])
+            torques_g[joint].append(torques_g_dict[joint])
+    
+    if args.gyro:
+        torques_nle_dict = robot.get_torques_dict(qdd_a, contact_forces, True)
+        for joint in joints:
+            if torques_nle[joint] is None:
+                torques_nle[joint] = [torques_nle_dict[joint]]
+            else:
+                torques_nle[joint].append(torques_nle_dict[joint])
 
     pressure_left.append(sum(contact_forces[:4]))
     pressure_right.append(sum(contact_forces[4:]))
@@ -163,7 +187,7 @@ for joint in joints:
     if sampled_vs_raw:
         plt.title(joint)
         plt.scatter(timestamps, read_positions[joint], label="raw positions", s=2)
-        plt.plot(corrected_timestamps, sampled_read_positions_list[used_acc][joint], label="polyfitted positions", linewidth=1)
+        plt.plot(corrected_timestamps, sampled_read_positions_list[used_spline][joint], label="polyfitted positions", linewidth=1)
         plt.xlabel("time")
         plt.ylabel("position (rad)")
         plt.grid()
@@ -224,7 +248,7 @@ for joint in joints:
         plt.legend()
 
         plt.subplot(312)
-        joint_acc = accelerations_list[used_acc][joint]
+        joint_acc = accelerations_list[used_spline][joint]
         plt.plot(timestamps, joint_acc, label="acceleration", linewidth=1)
         plt.xlabel("time")
         plt.ylabel("acceleration (rad/s^2)")
@@ -232,8 +256,11 @@ for joint in joints:
         plt.legend()
 
         plt.subplot(313)
-        joint_torque = torques[joint]
-        plt.plot(timestamps, joint_torque, label="sensor based torque estimation", linewidth=1)
+        joint_torque_g = torques_g[joint]
+        plt.plot(timestamps, joint_torque_g, label="torque estimation (gravity only)", linewidth=1)
+        if args.gyro:
+            joint_torque_nle = torques_nle[joint]
+            plt.plot(timestamps, joint_torque_nle, label="torque estimation (nonlinear effects)", linewidth=1)
         joint_false_torque = false_torques[joint]
         plt.plot(timestamps, joint_false_torque, label="naive torque estimation", linewidth=1)
         
